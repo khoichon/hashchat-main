@@ -2,10 +2,10 @@
 // auth.js — Login & Signup
 // ============================================
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Redirect if already logged in
-supabase.auth.getSession().then(({ data: { session } }) => {
+db.auth.getSession().then(({ data: { session } }) => {
   if (session) window.location.href = "app.html";
 });
 
@@ -58,7 +58,7 @@ document.getElementById("login-btn").addEventListener("click", async () => {
   setLoading("login-btn", true);
   setStatus("login-status", "// signing in...", "");
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await db.auth.signInWithPassword({ email, password });
 
   if (error) {
     setStatus("login-status", `// ${error.message.toLowerCase()}`, "error");
@@ -89,7 +89,7 @@ document.getElementById("signup-btn").addEventListener("click", async () => {
   setLoading("signup-btn", true);
   setStatus("signup-status", "// creating your account...", "");
 
-  const { error } = await supabase.auth.signUp({ email, password });
+  const { error } = await db.auth.signUp({ email, password });
 
   if (error) {
     setStatus("signup-status", `// ${error.message.toLowerCase()}`, "error");
