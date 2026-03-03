@@ -46,17 +46,19 @@ function hideLoading() {
 }
 
 function renderUserFooter() {
-  const avatar = document.getElementById("user-avatar");
-  const hash   = document.getElementById("user-hash");
+  const avatar    = document.getElementById("user-avatar");
+  const nameEl    = document.getElementById("user-name");
+  const hashEl    = document.getElementById("user-hash");
   avatar.style.background = currentProfile.color;
   avatar.textContent = currentProfile.name.slice(0, 2).toUpperCase();
-  hash.textContent = currentProfile.hash;
-  hash.title = "click to copy your hash";
-  hash.style.cursor = "pointer";
-  hash.addEventListener("click", () => {
+  nameEl.textContent = currentProfile.name;
+  hashEl.textContent = `#${currentProfile.hash}`;
+  hashEl.title = "click to copy your hash";
+  hashEl.style.cursor = "pointer";
+  hashEl.addEventListener("click", () => {
     navigator.clipboard.writeText(currentProfile.hash);
-    hash.textContent = "// copied!";
-    setTimeout(() => hash.textContent = currentProfile.hash, 1500);
+    hashEl.textContent = "// copied!";
+    setTimeout(() => hashEl.textContent = `#${currentProfile.hash}`, 1500);
   });
 }
 
@@ -136,8 +138,9 @@ function renderDMList() {
     const item = document.createElement("div");
     item.className = "room-item" + (room.id === currentRoomId ? " active" : "");
     item.dataset.id = room.id;
-    // DM room name is stored as "hash1 · hash2"
-    const label = room.name.replace(currentProfile.hash, "").replace("·", "").trim();
+    // DM room name is stored as "dm:hash1:hash2" — show the other person's name
+    const otherHash = room.name.replace("dm:", "").split(":").find(h => h !== currentProfile.hash) ?? "?";
+    const label = `#${otherHash}`;
     item.innerHTML = `<span class="room-prefix">@</span><span>${label}</span>`;
     item.addEventListener("click", () => openRoom(room));
     list.appendChild(item);
@@ -170,7 +173,7 @@ async function openRoom(room) {
       <button class="back-btn" id="back-btn">← back</button>
       <span class="chat-header-prefix">${room.is_dm ? "@" : "#"}</span>
       <span class="chat-header-name">${room.is_dm
-        ? room.name.replace(currentProfile.hash, "").replace("·", "").trim()
+        ? "#" + (room.name.replace("dm:", "").split(":").find(h => h !== currentProfile.hash) ?? "?")
         : room.name
       }</span>
       ${room.description ? `<span class="chat-header-desc">${room.description}</span>` : ""}
@@ -263,7 +266,8 @@ async function buildMsgEl(msg, collapsed = false) {
     <div class="msg-avatar" style="background:${profile.color}">${profile.name.slice(0,2).toUpperCase()}</div>
     <div class="msg-body">
       <div class="msg-meta">
-        <span class="msg-name" style="color:${profile.color}">${profile.hash}</span>
+        <span class="msg-name" style="color:${profile.color}">${profile.name}</span>
+        <span class="msg-hash-tag">(#${profile.hash})</span>
         <span class="msg-time">${formatTime(msg.timestamp)}</span>
       </div>
       ${replyHTML}
@@ -379,7 +383,8 @@ document.getElementById("invite-modal-cancel").addEventListener("click", () => {
 });
 
 document.getElementById("invite-modal-add").addEventListener("click", async () => {
-  const hash   = document.getElementById("invite-hash-input").value.trim();
+  const raw    = document.getElementById("invite-hash-input").value.trim();
+  const hash   = raw.startsWith("#") ? raw.slice(1) : raw;
   const status = document.getElementById("invite-modal-status");
 
   if (!hash) { status.textContent = "// enter a hash"; return; }
@@ -542,7 +547,8 @@ document.getElementById("dm-modal-cancel").addEventListener("click", () => {
 });
 
 document.getElementById("dm-modal-open").addEventListener("click", async () => {
-  const hash   = document.getElementById("dm-hash-input").value.trim();
+  const raw    = document.getElementById("dm-hash-input").value.trim();
+  const hash   = raw.startsWith("#") ? raw.slice(1) : raw;
   const status = document.getElementById("dm-modal-status");
 
   if (!hash) { status.textContent = "// enter a hash"; return; }
@@ -590,7 +596,7 @@ document.getElementById("dm-modal-open").addEventListener("click", async () => {
   }
 
   // Create new DM room
-  const dmName = `${currentProfile.hash} · ${target.hash}`;
+  const dmName = `dm:${currentProfile.hash}:${target.hash}`;
   const { data: room, error } = await db
     .from("rooms")
     .insert({ name: dmName, is_dm: true })
