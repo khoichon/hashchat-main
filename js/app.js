@@ -2,7 +2,7 @@
 // app.js — Main chat logic
 // ============================================
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const db = window.db.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ── State ─────────────────────────────────
 let currentUser     = null;   // auth user
@@ -16,13 +16,13 @@ let allDMs          = [];     // dm rooms
 // ── Boot ──────────────────────────────────
 
 async function boot() {
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { session } } = await db.auth.getSession();
   if (!session) { window.location.href = "index.html"; return; }
 
   currentUser = session.user;
 
   // Load own profile
-  const { data: profile } = await supabase
+  const { data: profile } = await db
     .from("users")
     .select("*")
     .eq("id", currentUser.id)
@@ -77,7 +77,7 @@ async function loadSidebar() {
   // Load public rooms user is a member of + auto-join general
   await ensureGeneralMembership();
 
-  const { data: memberRooms } = await supabase
+  const { data: memberRooms } = await db
     .from("room_members")
     .select("room_id, rooms(*)")
     .eq("user_id", currentUser.id)
@@ -94,7 +94,7 @@ async function loadSidebar() {
 
 async function ensureGeneralMembership() {
   const generalId = "00000000-0000-0000-0000-000000000001";
-  const { data } = await supabase
+  const { data } = await db
     .from("room_members")
     .select("room_id")
     .eq("room_id", generalId)
@@ -102,7 +102,7 @@ async function ensureGeneralMembership() {
     .single();
 
   if (!data) {
-    await supabase.from("room_members").insert({
+    await db.from("room_members").insert({
       room_id: generalId,
       user_id: currentUser.id,
     });
@@ -183,7 +183,7 @@ async function openRoom(room) {
 // ── Messages ──────────────────────────────
 
 async function loadMessages() {
-  const { data: messages } = await supabase
+  const { data: messages } = await db
     .from("messages")
     .select("*, users(*)")
     .eq("room_id", currentRoomId)
@@ -226,7 +226,7 @@ async function buildMsgEl(msg, collapsed = false) {
   // Reply context
   let replyHTML = "";
   if (msg.reply_id) {
-    const { data: replied } = await supabase
+    const { data: replied } = await db
       .from("messages")
       .select("content, users(hash)")
       .eq("id", msg.reply_id)
@@ -274,9 +274,9 @@ function scrollToBottom() {
 // ── Realtime ──────────────────────────────
 
 function subscribeToRoom(roomId) {
-  if (msgSubscription) supabase.removeChannel(msgSubscription);
+  if (msgSubscription) db.removeChannel(msgSubscription);
 
-  msgSubscription = supabase
+  msgSubscription = db
     .channel(`room-${roomId}`)
     .on("postgres_changes", {
       event: "INSERT",
@@ -285,7 +285,7 @@ function subscribeToRoom(roomId) {
       filter: `room_id=eq.${roomId}`,
     }, async payload => {
       // Fetch full message with user
-      const { data: msg } = await supabase
+      const { data: msg } = await db
         .from("messages")
         .select("*, users(*)")
         .eq("id", payload.new.id)
@@ -319,7 +319,7 @@ function subscribeToRoom(roomId) {
 
       if (lastMsg) {
         const lastId = lastMsg.dataset.id;
-        const { data: lastData } = await supabase
+        const { data: lastData } = await db
           .from("messages")
           .select("user_id, timestamp")
           .eq("id", lastId)
@@ -349,7 +349,7 @@ async function sendMessage() {
   const btn = document.getElementById("send-btn");
   btn.disabled = true;
 
-  const { error } = await supabase.from("messages").insert({
+  const { error } = await db.from("messages").insert({
     room_id:  currentRoomId,
     user_id:  currentUser.id,
     content,
@@ -428,7 +428,7 @@ document.getElementById("room-modal-create").addEventListener("click", async () 
 
   if (!name) { status.textContent = "// name required"; return; }
 
-  const { data: room, error } = await supabase
+  const { data: room, error } = await db
     .from("rooms")
     .insert({ name, description: desc || null, is_dm: false })
     .select()
@@ -437,7 +437,7 @@ document.getElementById("room-modal-create").addEventListener("click", async () 
   if (error) { status.textContent = `// ${error.message}`; return; }
 
   // Join the room
-  await supabase.from("room_members").insert({ room_id: room.id, user_id: currentUser.id });
+  await db.from("room_members").insert({ room_id: room.id, user_id: currentUser.id });
 
   allRooms.push(room);
   renderRoomList();
@@ -466,7 +466,7 @@ document.getElementById("dm-modal-open").addEventListener("click", async () => {
   if (hash === currentProfile.hash) { status.textContent = "// that's you, bestie"; return; }
 
   // Find the target user
-  const { data: target } = await supabase
+  const { data: target } = await db
     .from("users")
     .select("*")
     .eq("hash", hash)
@@ -475,7 +475,7 @@ document.getElementById("dm-modal-open").addEventListener("click", async () => {
   if (!target) { status.textContent = "// user not found"; return; }
 
   // Check if DM room already exists between these two users
-  const { data: existing } = await supabase
+  const { data: existing } = await db
     .from("room_members")
     .select("room_id, rooms!inner(is_dm)")
     .eq("user_id", currentUser.id)
@@ -483,14 +483,14 @@ document.getElementById("dm-modal-open").addEventListener("click", async () => {
 
   if (existing) {
     for (const row of existing) {
-      const { data: members } = await supabase
+      const { data: members } = await db
         .from("room_members")
         .select("user_id")
         .eq("room_id", row.room_id);
       const ids = members.map(m => m.user_id);
       if (ids.includes(target.id) && ids.length === 2) {
         // Already exists, just open it
-        const { data: existingRoom } = await supabase
+        const { data: existingRoom } = await db
           .from("rooms")
           .select("*")
           .eq("id", row.room_id)
@@ -508,7 +508,7 @@ document.getElementById("dm-modal-open").addEventListener("click", async () => {
 
   // Create new DM room
   const dmName = `${currentProfile.hash} · ${target.hash}`;
-  const { data: room, error } = await supabase
+  const { data: room, error } = await db
     .from("rooms")
     .insert({ name: dmName, is_dm: true })
     .select()
@@ -517,7 +517,7 @@ document.getElementById("dm-modal-open").addEventListener("click", async () => {
   if (error) { status.textContent = `// ${error.message}`; return; }
 
   // Add both members
-  await supabase.from("room_members").insert([
+  await db.from("room_members").insert([
     { room_id: room.id, user_id: currentUser.id },
     { room_id: room.id, user_id: target.id },
   ]);
@@ -531,7 +531,7 @@ document.getElementById("dm-modal-open").addEventListener("click", async () => {
 // ── Sign out ──────────────────────────────
 
 document.getElementById("signout-btn").addEventListener("click", async () => {
-  await supabase.auth.signOut();
+  await db.auth.signOut();
   window.location.href = "index.html";
 });
 
