@@ -2,7 +2,7 @@
 // app.js — Main chat logic
 // ============================================
 
-const db = window.db.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ── State ─────────────────────────────────
 let currentUser     = null;   // auth user
