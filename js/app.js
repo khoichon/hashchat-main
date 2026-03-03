@@ -51,6 +51,13 @@ function renderUserFooter() {
   avatar.style.background = currentProfile.color;
   avatar.textContent = currentProfile.name.slice(0, 2).toUpperCase();
   hash.textContent = currentProfile.hash;
+  hash.title = "click to copy your hash";
+  hash.style.cursor = "pointer";
+  hash.addEventListener("click", () => {
+    navigator.clipboard.writeText(currentProfile.hash);
+    hash.textContent = "// copied!";
+    setTimeout(() => hash.textContent = currentProfile.hash, 1500);
+  });
 }
 
 function makeAvatar(profile) {
