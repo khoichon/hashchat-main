@@ -21,14 +21,26 @@ async function boot() {
 
   currentUser = session.user;
 
-  // Load own profile
-  const { data: profile } = await db
-    .from("users")
-    .select("*")
-    .eq("id", currentUser.id)
-    .single();
+  // Profile may not exist yet if the trigger is still running post-signup
+  // Retry a few times before giving up
+  let profile = null;
+  for (let i = 0; i < 5; i++) {
+    const { data } = await db
+      .from("users")
+      .select("*")
+      .eq("id", currentUser.id)
+      .single();
+    if (data) { profile = data; break; }
+    await new Promise(r => setTimeout(r, 600)); // wait 600ms between retries
+  }
 
-  if (!profile) { window.location.href = "index.html"; return; }
+  if (!profile) {
+    // Profile genuinely doesn't exist — sign out and go back cleanly
+    await db.auth.signOut();
+    window.location.href = "index.html";
+    return;
+  }
+
   currentProfile = profile;
 
   renderUserFooter();
