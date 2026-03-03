@@ -29,7 +29,7 @@ async function boot() {
       .from("users")
       .select("*")
       .eq("id", currentUser.id)
-      .single();
+      .maybeSingle();
     if (data) { profile = data; break; }
     await new Promise(r => setTimeout(r, 600)); // wait 600ms between retries
   }
@@ -120,7 +120,7 @@ async function ensureGeneralMembership() {
     .select("room_id")
     .eq("room_id", generalId)
     .eq("user_id", currentUser.id)
-    .single();
+    .maybeSingle();
 
   if (!data) {
     await db.from("room_members").insert({
@@ -268,7 +268,7 @@ async function buildMsgEl(msg, collapsed = false) {
       .from("messages")
       .select("content, users(hash)")
       .eq("id", msg.reply_id)
-      .single();
+      .maybeSingle();
     if (replied) {
       replyHTML = `<div class="msg-reply">↩ ${replied.users?.hash ?? "?"}: ${replied.content.slice(0, 60)}${replied.content.length > 60 ? "…" : ""}</div>`;
     }
@@ -328,7 +328,7 @@ function subscribeToRoom(roomId) {
         .from("messages")
         .select("*, users(*)")
         .eq("id", payload.new.id)
-        .single();
+        .maybeSingle();
 
       if (!msg) return;
 
@@ -362,7 +362,7 @@ function subscribeToRoom(roomId) {
           .from("messages")
           .select("user_id, timestamp")
           .eq("id", lastId)
-          .single();
+          .maybeSingle();
         if (lastData &&
             lastData.user_id === msg.user_id &&
             (new Date(msg.timestamp) - new Date(lastData.timestamp)) < 5 * 60 * 1000) {
@@ -407,7 +407,7 @@ document.getElementById("invite-modal-add").addEventListener("click", async () =
     .from("users")
     .select("*")
     .eq("hash", hash)
-    .single();
+    .maybeSingle();
 
   if (userErr || !target) { status.textContent = "// user not found"; return; }
 
@@ -417,7 +417,7 @@ document.getElementById("invite-modal-add").addEventListener("click", async () =
     .select("user_id")
     .eq("room_id", currentRoomId)
     .eq("user_id", target.id)
-    .single();
+    .maybeSingle();
 
   if (existing) { status.textContent = "// already in this room"; return; }
 
@@ -456,7 +456,12 @@ async function sendMessage() {
     reply_id: replyToMsg?.id ?? null,
   });
 
-  if (!error) {
+  if (error) {
+    console.error("send error:", error);
+    // Show error briefly in the input placeholder
+    input.placeholder = `// error: ${error.message ?? error.code ?? "unknown"}`;
+    setTimeout(() => input.placeholder = "// message", 3000);
+  } else {
     input.value = "";
     input.style.height = "auto";
     clearReply();
@@ -532,7 +537,7 @@ document.getElementById("room-modal-create").addEventListener("click", async () 
     .from("rooms")
     .insert({ name, description: desc || null, is_dm: false })
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) { status.textContent = `// ${error.message}`; return; }
 
@@ -571,7 +576,7 @@ document.getElementById("dm-modal-open").addEventListener("click", async () => {
     .from("users")
     .select("*")
     .eq("hash", hash)
-    .single();
+    .maybeSingle();
 
   if (!target) { status.textContent = "// user not found"; return; }
 
@@ -595,7 +600,7 @@ document.getElementById("dm-modal-open").addEventListener("click", async () => {
           .from("rooms")
           .select("*")
           .eq("id", row.room_id)
-          .single();
+          .maybeSingle();
         document.getElementById("dm-modal-cancel").click();
         if (!allDMs.find(r => r.id === existingRoom.id)) {
           allDMs.push(existingRoom);
@@ -613,7 +618,7 @@ document.getElementById("dm-modal-open").addEventListener("click", async () => {
     .from("rooms")
     .insert({ name: dmName, is_dm: true })
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) { status.textContent = `// ${error.message}`; return; }
 
